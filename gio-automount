@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+
+
+GIO_CONFIG="$HOME/.config/gio-automount"
+MOUNT_LIST_FILE="$GIO_CONFIG/mount_list"
+
+show_help() {
+	echo "Usage:"
+	echo "  gio-automount COMMAND TARGET"
+	echo "Commands:"
+	echo "  add      Add a new mount"
+	echo "  remove   Remove a mount"
+	echo "  disable  Disable a mount"
+	echo "  enable   Enable a mount"
+	echo "  list     List all included mounts"
+	echo "  mount    Mount all included mounts"
+}
+
+try_mount() {
+	TARGET="$1"
+	MOUNTED=$(gio mount -l | grep "$TARGET")
+
+	if [ ! "$MOUNTED" ]; then
+		gio mount "$TARGET"
+		gio mount -u "$TARGET"
+	fi
+}
+
+create_config_file() {
+	if [ ! -d "$GIO_CONFIG" ]; then
+		mkdir -p "$GIO_CONFIG"
+	fi
+
+	if [ ! -f "$MOUNT_LIST_FILE" ]; then
+		touch "$MOUNT_LIST_FILE"
+	fi
+}
+
+replace_in_config() {
+	cat > "$1.tmp"
+	cat "$1.tmp" > "$1"
+	rm "$1.tmp"
+}
+
+mount_add_to_config() {
+	TARGET="$1"
+
+	create_config_file
+	if [ ! "$(grep -F "$TARGET" "$MOUNT_LIST_FILE")" ]; then
+		echo "$TARGET" >> "$MOUNT_LIST_FILE"
+	fi
+}
+
+mount_remove_in_config() {
+	TARGET="$1"
+
+
+	if [ -f "$MOUNT_LIST_FILE" ]; then
+		grep -F -v "$TARGET" "$MOUNT_LIST_FILE" | replace_in_config "$MOUNT_LIST_FILE"
+	fi
+}
+
+mount_remove() {
+	if [ ! "$1" ]; then
+		echo "Usage: mount remove PATH"
+		exit 1
+	fi
+
+	mount_remove_in_config "$1"
+}
+
+mount_comment_line() {
+	TARGET="$1"
+	while read line; do 
+		if [ "$line" == "$TARGET" ]; then
+			line="#$line"
+		fi
+		echo $line
+	done
+}
+
+mount_uncomment_line() {
+	TARGET="$1"
+	while read line; do
+		m=$(echo $line | sed -E 's/^\s*#\s*//g')
+		if [ "$m" == "$TARGET" ]; then
+			line="$m"
+		fi
+		echo $line
+	done
+}
+
+mount_disable_in_config() {
+	if [ "$MOUNT_LIST_FILE" ]; then
+		cat "$MOUNT_LIST_FILE" | mount_comment_line "$1" | replace_in_config "$MOUNT_LIST_FILE"
+	fi
+}
+
+mount_disable() {
+	if [ ! "$1" ]; then
+		echo "Usage: mount disable PATH"
+		exit 1
+	fi
+
+	mount_disable_in_config "$1"
+}
+
+mount_enable_in_config() {
+	if [ "$MOUNT_LIST_FILE" ]; then
+		cat "$MOUNT_LIST_FILE" | mount_uncomment_line "$1" | replace_in_config "$MOUNT_LIST_FILE"
+	fi
+}
+
+
+mount_enable() {
+	if [ ! "$1" ]; then
+		echo "Usage: mount enable PATH"
+		exit 1
+	fi
+
+	mount_enable_in_config "$1"
+}
+
+mount_add() {
+	if [ ! "$1" ]; then
+		echo "Usage: mount add PATH"
+		exit 1
+	fi
+
+	try_mount "$1" && mount_add_to_config "$1"
+}
+
+mount_list() {
+	if [ -f "$MOUNT_LIST_FILE" ]; then
+		cat "$MOUNT_LIST_FILE" | sed -E 's/^\s*#(.*)/\1 [disabled]/g'
+	else
+		echo "No entries."
+	fi
+}
+
+mount_list_enabled() {
+	if [ -f "$MOUNT_LIST_FILE" ]; then
+		cat "$MOUNT_LIST_FILE" | egrep -v "^\s*#"
+	fi
+}
+
+mount_mount() {
+	if [ "$1" ]; then
+		try_mount "$1"
+	else
+		mount_list_enabled | while read m; do try_mount "$m"; done
+	fi
+}
+
+
+if [ $# -lt 1 ]; then
+	show_help
+	exit 1
+fi
+
+COMMAND=$1
+TARGET="$2"
+
+case $COMMAND in
+	add) mount_add "$TARGET" ;;
+	remove) mount_remove "$TARGET" ;;
+	enable) mount_enable "$TARGET" ;;
+	disable) mount_disable "$TARGET" ;;
+	list) mount_list ;;
+	mount) mount_mount $TARGET ;;
+	*) show_help; exit 1 ;;
+esac
+
+if [ $? -ne 0 ]; then
+	echo "Couldn't $COMMAND $TARGET"
+fi

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+GIO_CONFIG="$HOME/.config/gio-automount"
+MOUNT_LIST_FILE="$GIO_CONFIG/mount_list"
+
+sleep $(($RANDOM%10))
+
+if [ -f "$MOUNT_LIST_FILE" ]; then
+	cat $MOUNT_LIST_FILE | egrep -v "^\s*#" | while read m; do
+		gio mount "$m"
+	done
+fi

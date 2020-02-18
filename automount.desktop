@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Exec=$HOME/.config/gio-automount/automount
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name[en]=GIO Automount
+Name=GIO Automount
+Comment[en]=Automatically mount shares and devices on GNOME startup
+Comment=Automatically mount shares and devices on GNOME startup
